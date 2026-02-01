@@ -83,3 +83,8 @@ services:
     depends_on:
       kestra_postgres:
         condition: service_started
+
+networks:
+  default:
+    external: true
+    name: zoomcamp_network

@@ -15,10 +15,19 @@ provider "docker" {
   host = "unix:///var/run/docker.sock"
 }
 
+data "docker_network" "zoomcamp_net" {
+  name = "zoomcamp_network"
+
+}
+
 resource "docker_container" "minio_server" {
-  name    = "local_minio_server"
+  name    = "minio-server"
   image   = "quay.io/minio/minio:latest"
   command = ["server", "/data", "--console-address", ":9001"]
+
+  networks_advanced {
+    name = data.docker_network.zoomcamp_net.name
+  }
 
   volumes {
     host_path      = "${path.cwd}/minio_data"
