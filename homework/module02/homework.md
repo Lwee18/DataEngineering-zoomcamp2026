@@ -42,3 +42,9 @@ select
 from yellow_tripdata
 where filename = 'yellow_tripdata_2021-03.csv';
 ```
+
+## Kestra Workflow
+
+The data ingestion and transformation logic used to answer the questions above is implemented using a Kestra workflow:
+
+➡️ [PostgreSQL Taxi Ingestion Workflow](../../module02-woorkflow-orchestration/files/postgres_taxi.yml)
