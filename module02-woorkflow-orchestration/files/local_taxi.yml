@@ -1,5 +1,7 @@
 id: local_taxi
 namespace: zoomcamp
+description: >
+  A workflow to extract, load and transform NYC taxi data into a local DuckDB instance using MinIO as object storage.
 
 inputs:
   - id: taxi
