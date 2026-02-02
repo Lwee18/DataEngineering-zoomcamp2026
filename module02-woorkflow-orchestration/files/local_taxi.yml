@@ -1,0 +1,248 @@
+id: local_taxi
+namespace: zoomcamp
+
+inputs:
+  - id: taxi
+    type: SELECT
+    displayName: Select taxi type
+    values: [yellow, green]
+    defaults: green
+
+  - id: year
+    type: SELECT
+    displayName: Select year
+    values: ["2019", "2020"]
+    defaults: "2019"
+    allowCustomValue: true 
+
+  - id: month
+    type: SELECT
+    displayName: Select month
+    values: ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"]
+    defaults: "01"
+
+variables:
+  file: "{{inputs.taxi}}_tripdata_{{inputs.year}}-{{inputs.month}}.csv"
+  minio_file: "{{inputs.taxi}}/{{vars.file}}"
+  staging_table: "{{inputs.taxi}}_tripdata_staging"
+  table: "{{inputs.taxi}}_tripdata"
+  data: "{{outputs.extract.outputFiles[inputs.taxi ~ '_tripdata_' ~ inputs.year ~ '-' ~ inputs.month ~ '.csv']}}"
+
+tasks:
+
+  - id: set_label
+    type: io.kestra.plugin.core.execution.Labels
+    labels:
+      file: "{{render(vars.file)}}"
+      taxi: "{{inputs.taxi}}"
+
+  - id: extract
+    type: io.kestra.plugin.scripts.shell.Commands
+    outputFiles:
+      - "*.csv"
+    taskRunner:
+      type: io.kestra.plugin.core.runner.Process
+    commands:
+      - wget -qO- https://github.com/DataTalksClub/nyc-tlc-data/releases/download/{{inputs.taxi}}/{{render(vars.file)}}.gz | gunzip > {{render(vars.file)}}
+
+
+  - id: upload_to_minio
+    type: "io.kestra.plugin.minio.Upload"
+    from: "{{render(vars.data)}}"
+    bucket: "kestra-workflow-bucket"
+    key: '{{render(vars.minio_file)}}'
+
+  - id: if_yellow_taxi
+    type: io.kestra.plugin.core.flow.If
+    condition: "{{inputs.taxi == 'yellow'}}"
+    then:
+     - id: yellow_create_table
+       type: io.kestra.plugin.jdbc.duckdb.Queries
+       sql: |
+          CREATE TABLE IF NOT EXISTS {{render(vars.table)}} (
+              unique_row_id          TEXT,
+              filename               TEXT,
+              VendorID               TEXT,
+              tpep_pickup_datetime   TIMESTAMP,
+              tpep_dropoff_datetime  TIMESTAMP,
+              passenger_count        INTEGER,
+              trip_distance          DOUBLE,
+              RatecodeID             TEXT,
+              store_and_fwd_flag     TEXT,
+              PULocationID           TEXT,
+              DOLocationID           TEXT,
+              payment_type           INTEGER,
+              fare_amount            DOUBLE,
+              extra                  DOUBLE,
+              mta_tax                DOUBLE,
+              tip_amount             DOUBLE,
+              tolls_amount           DOUBLE,
+              improvement_surcharge  DOUBLE,
+              total_amount           DOUBLE,
+              congestion_surcharge   DOUBLE
+           );
+
+     - id: yellow_create_staging_table
+       type: io.kestra.plugin.jdbc.duckdb.Queries
+       sql: |
+          CREATE OR REPLACE TABLE {{render(vars.staging_table)}} AS
+          SELECT *
+          FROM read_csv_auto(
+            's3://kestra-workflow-bucket/ny_taxi/{{render(vars.minio_file)}}',
+            header = TRUE
+          )
+          LIMIT 0;
+
+     - id: yellow_copy_in_to_staging_table
+       type: io.kestra.plugin.jdbc.duckdb.Queries
+       sql: |
+          INSERT INTO {{render(vars.staging_table)}}
+          SELECT *
+          FROM read_csv_auto(
+            's3://kestra-workflow-bucket/ny_taxi/{{render(vars.minio_file)}}',
+            header = TRUE
+          );
+
+     - id: yellow_add_unique_id_and_filename
+       type: io.kestra.plugin.jdbc.duckdb.Queries
+       sql: |
+        UPDATE {{render(vars.staging_table)}}
+        SET
+          unique_row_id = md5(
+            COALESCE(CAST(VendorID AS TEXT), '') ||
+            COALESCE(CAST(tpep_pickup_datetime AS TEXT), '') ||
+            COALESCE(CAST(tpep_dropoff_datetime AS TEXT), '') ||
+            COALESCE(PULocationID, '') ||
+            COALESCE(DOLocationID, '') ||
+            COALESCE(CAST(fare_amount AS TEXT), '') ||
+            COALESCE(CAST(trip_distance AS TEXT), '')
+          ),
+          filename = '{{render(vars.file)}}';
+
+     - id: yellow_merge_data
+       type: io.kestra.plugin.jdbc.duckdb.Queries
+       sql: |
+        INSERT INTO {{render(vars.table)}}
+        SELECT *
+        FROM {{render(vars.staging_table)}} S
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM {{render(vars.table)}} T
+          WHERE T.unique_row_id = S.unique_row_id
+        );
+  - id: if_green_taxi
+    type: io.kestra.plugin.core.flow.If
+    condition: "{{inputs.taxi == 'green'}}"
+    then:
+
+      - id: green_create_table
+        type: io.kestra.plugin.jdbc.duckdb.Queries
+        sql: |
+         CREATE TABLE IF NOT EXISTS {{render(vars.table)}} (
+              unique_row_id          text,
+              filename               text,
+              VendorID               text,
+              lpep_pickup_datetime   timestamp,
+              lpep_dropoff_datetime  timestamp,
+              store_and_fwd_flag     text,
+              RatecodeID             text,
+              PULocationID           text,
+              DOLocationID           text,
+              passenger_count        integer,
+              trip_distance          double precision,
+              fare_amount            double precision,
+              extra                  double precision,
+              mta_tax                double precision,
+              tip_amount             double precision,
+              tolls_amount           double precision,
+              ehail_fee              double precision,
+              improvement_surcharge  double precision,
+              total_amount           double precision,
+              payment_type           integer,
+              trip_type              integer,
+              congestion_surcharge   double precision
+         );
+
+      - id: green_create_staging_table
+        type: io.kestra.plugin.jdbc.duckdb.Queries
+        sql: |
+         CREATE OR REPLACE TABLE {{render(vars.staging_table)}} AS
+          SELECT *
+          FROM read_csv_auto(
+            's3://kestra-workflow-bucket/ny_taxi/{{render(vars.minio_file)}}',
+            header = TRUE
+          )
+          LIMIT 0;
+
+      - id: green_copy_in_to_staging_table
+        type: io.kestra.plugin.jdbc.duckdb.Queries
+        sql: |
+          INSERT INTO {{render(vars.staging_table)}}
+          SELECT *
+          FROM read_csv_auto(
+            's3://kestra-workflow-bucket/ny_taxi/{{render(vars.minio_file)}}',
+            header = TRUE
+          );
+
+      - id: green_add_unique_id_and_filename
+        type: io.kestra.plugin.jdbc.duckdb.Queries
+        sql: |
+         UPDATE {{render(vars.staging_table)}}
+         SET
+          unique_row_id = md5(
+            COALESCE(CAST(VendorID AS TEXT), '') ||
+            COALESCE(CAST(tpep_pickup_datetime AS TEXT), '') ||
+            COALESCE(CAST(tpep_dropoff_datetime AS TEXT), '') ||
+            COALESCE(PULocationID, '') ||
+            COALESCE(DOLocationID, '') ||
+            COALESCE(CAST(fare_amount AS TEXT), '') ||
+            COALESCE(CAST(trip_distance AS TEXT), '')
+          ),
+          filename = '{{render(vars.file)}}';
+  
+      - id: green_merge_data
+        type: io.kestra.plugin.jdbc.duckdb.Queries
+        sql: |
+          INSERT INTO {{render(vars.table)}}
+          SELECT *
+          FROM {{render(vars.staging_table)}} S
+          WHERE NOT EXISTS (
+            SELECT 1
+            FROM {{render(vars.table)}} T
+            WHERE T.unique_row_id = S.unique_row_idAdmin1234
+          );
+
+  - id: purge_files
+    type: io.kestra.plugin.core.storage.PurgeCurrentExecutionFiles
+    description: If you'd like to explore Kestra outputs, disable it.
+    disabled: false
+        
+pluginDefaults:
+  - type: io.kestra.plugin.minio
+    values:
+      endpoint: "{{kv('MINIO_ENDPOINT')}}"
+      accessKeyId: "{{kv('MINIO_ACCESS_KEY')}}"
+      secretKeyId: "{{kv('MINIO_SECRET_KEY')}}"
+
+  - type: io.kestra.plugin.jdbc.duckdb
+    values:
+      url: jdbc:duckdb:/tmp/ny_taxi.duckdb
+      sql: |
+        INSTALL httpfs;
+        LOAD httpfs;
+        SET s3_endpoint='{{kv('S3_ENDPOINT')}}';
+        SET s3_access_key_id='{{kv('MINIO_ACCESS_KEY')}}';
+        SET s3_secret_access_key='{{kv('MINIO_SECRET_KEY')}}';
+        SET s3_use_ssl=false;
+        SET s3_url_style='path';
+  
+
+
+
+
+
+
+
+
+
+
