@@ -1,7 +1,7 @@
 .terraform/
 *.tfstate
 *.tfstate.backup
-*.vscode/
+.vscode
 minio_data/
 
 # Byte-compiled / optimized / DLL files
