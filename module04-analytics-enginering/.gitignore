@@ -1,0 +1,4 @@
+
+taxi_rides_ny/data/
+*.duckdb
+*.duckdb.wal

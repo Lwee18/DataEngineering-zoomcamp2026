@@ -4,6 +4,31 @@
 .vscode
 minio_data/
 
+# IDE and System files
+.vscode-server/
+.altimate/
+.dotnet/
+.bash_history
+.ssh/
+.gitconfig
+.bashrc
+.user.yml
+
+# dbt artifacts
+**/target/
+**/dbt_packages/
+**/logs/
+
+# Data
+data/
+*.duckdb
+*.duckdb.wal
+
+# Local config & Temp
+profiles.yml
+tmp_duckdb/
+.env
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

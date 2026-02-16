@@ -1,0 +1,15 @@
+services:
+  dbt-env:
+    build: .
+    user: "${USER_ID:-1000}:${GROUP_ID:-1000}"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    volumes:
+      - .:/app  
+    working_dir: /app/taxi_rides_ny
+    environment:
+      - HOME=/app
+      - DBT_PROFILES_DIR=/app/taxi_rides_ny
+    stdin_open: true
+    tty: true
