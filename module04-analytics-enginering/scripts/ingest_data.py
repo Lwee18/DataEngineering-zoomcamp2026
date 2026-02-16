@@ -2,7 +2,11 @@ import duckdb
 import requests
 from pathlib import Path
 
+# BASE_URL = "https://github.com/DataTalksClub/nyc-tlc-data/releases/download"
 BASE_URL = "https://github.com/DataTalksClub/nyc-tlc-data/releases/download"
+
+# https://github.com/DataTalksClub/nyc-tlc-data/releases/download/yellow/yellow_tripdata_2019-01.csv.gz
+# https://github.com/DataTalksClub/nyc-tlc-data/releases/download/fhv/fhv_tripdata_2019-01.csv.gz
 
 PROJECT_DIR = Path("/app/taxi_rides_ny")
 DB_PATH = PROJECT_DIR / "taxi_rides_ny.duckdb"
@@ -13,7 +17,7 @@ def download_and_convert_files(taxi_type):
     target_dir = DATA_DIR / taxi_type
     target_dir.mkdir(exist_ok=True, parents=True)
 
-    for year in [2019, 2020]:
+    for year in [2019, 2020, 2021]:
         for month in range(1, 13):
             parquet_filename = f"{taxi_type}_tripdata_{year}-{month:02d}.parquet"
             parquet_filepath = target_dir / parquet_filename
@@ -67,20 +71,25 @@ if __name__ == "__main__":
     # Update .gitignore to exclude data directory
     update_gitignore()
 
-    for taxi_type in ["yellow", "green"]:
-        download_and_convert_files(taxi_type)
-
+    # for taxi_type in ["yellow", "green"]:
+    #     download_and_convert_files(taxi_type)
+    download_and_convert_files("fhv")
     # Connect to the persistent database file
     print(f"Loading data into {DB_PATH}...")
     con = duckdb.connect(str(DB_PATH))
     con.execute("CREATE SCHEMA IF NOT EXISTS prod")
 
-    for taxi_type in ["yellow", "green"]:
-        # We use 'union_by_name' to handle schema changes between months
-        con.execute(f"""
+    con.execute(f"""
             CREATE OR REPLACE TABLE prod.{taxi_type}_tripdata AS
             SELECT * FROM read_parquet('{DATA_DIR}/{taxi_type}/*.parquet', union_by_name=true)
         """)
+
+    # for taxi_type in ["yellow", "green"]:
+    #     # We use 'union_by_name' to handle schema changes between months
+    #     con.execute(f"""
+    #         CREATE OR REPLACE TABLE prod.{taxi_type}_tripdata AS
+    #         SELECT * FROM read_parquet('{DATA_DIR}/{taxi_type}/*.parquet', union_by_name=true)
+    #     """)
     
     con.close()
     print("Ingestion complete!")

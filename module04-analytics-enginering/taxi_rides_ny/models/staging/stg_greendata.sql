@@ -28,7 +28,4 @@ with green_data as(
     from {{ source('raw_data', 'green_tripdata') }}
     where vendorid is not null
 )
-select 
-    {{ dbt_utils.generate_surrogate_key(['pickup_datetime','dropoff_datetime','trip_distance','taxi_type']) }} as trip_id,
-    *
-from green_data
+select * from green_data
