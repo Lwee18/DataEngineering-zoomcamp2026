@@ -188,7 +188,6 @@ VS Code will:
 -   Build Docker image if required
 -   Start dbt-env service
 -   Mount project into /app
--   
 -   Open workspace at /app/taxi_rides_ny
 
 ------------------------------------------------------------------------
