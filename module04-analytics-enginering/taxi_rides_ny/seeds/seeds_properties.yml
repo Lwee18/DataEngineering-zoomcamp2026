@@ -1,0 +1,20 @@
+seeds:
+  - name: taxi_zone_lookup
+    description: >
+      Taxi Zones roughly based on NYC Department of City Planning's Neighborhood
+      Tabulation Areas (NTAs) and are meant to approximate neighborhoods, so you can see which
+      neighborhood a passenger was picked up in, and which neighborhood they were dropped off in.
+      Includes associated service_zone (EWR, Boro Zone, Yellow Zone)
+    columns:
+      - name: location_id
+        description: >
+          A unique identifier for each taxi zone. This is the primary key for this table.
+      - name: borough
+        description: >   
+          The borough in which the taxi zone is located. One of: Bronx, Brooklyn, Manhattan, Queens, Staten Island.
+      - name: zone
+        description: >
+          The name of the taxi zone, which is typically a neighborhood or group of neighborhoods.
+      - name: service_zone
+        description: >
+          The service zone for the taxi zone, which is one of: EWR (Newark Airport), Boro Zone (zones in the boroughs), Yellow Zone (zones in Manhattan). This is used to determine which taxi trips are eligible for yellow taxi service, which is only allowed in the Yellow Zone.
